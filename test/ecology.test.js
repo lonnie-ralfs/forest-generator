@@ -1,0 +1,8 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { makeForest } from '../src/ecology.js';
+const config = { seed: 7421, size: 280, density: 0.75, relief: 65, slopeLimit: 30, roots: 0.6 };
+test('seed reproduces tree placement and foliage', () => { const a = makeForest(config), b = makeForest(config); assert.deepEqual(a.trees, b.trees); assert.deepEqual(a.foliage, b.foliage); assert.notDeepEqual(a.trees, makeForest({ ...config, seed: 3 }).trees); });
+test('forest obeys slope, extent, habitat and contains both crown types', () => { const f = makeForest(config); assert.ok(f.trees.length > 100); assert.ok(f.trees.some(t => t.edge)); assert.ok(f.trees.some(t => !t.edge)); for (const t of f.trees) { assert.ok(t.slope <= config.slopeLimit); assert.ok(f.suitable(t.x, t.z)); assert.ok(Math.abs(t.x) < config.size / 2); assert.ok(t.y > f.height(t.x, t.z)); } });
+test('shaded floor excludes grass and root uplift can be disabled', () => { const f = makeForest(config); assert.ok(f.foliage.some(p => p.kind === 'fern')); for (const p of f.foliage) { if (p.shade > 0.3) assert.notEqual(p.kind, 'grass'); else assert.equal(p.kind, 'grass'); } const flatRoots = makeForest({ ...config, roots: 0 }); for (const t of flatRoots.trees) assert.equal(flatRoots.rootHeight(t.x, t.z), 0); });
+test('elevation attenuation reduces average size at high altitude', () => { const f = makeForest(config); const sorted = [...f.trees].sort((a, b) => a.y - b.y), quarter = Math.floor(sorted.length / 4); const avg = xs => xs.reduce((s, t) => s + t.scale, 0) / xs.length; assert.ok(avg(sorted.slice(-quarter)) < avg(sorted.slice(0, quarter))); });
