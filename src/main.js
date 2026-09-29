@@ -25,11 +25,13 @@ document.querySelector('#app').innerHTML = `
     <div class="actions"><button id="randomize">⤨ Random seed</button><button id="export">↓ Export settings</button></div>
   </section>
   <section><div class="section-title"><h3>Light & depth</h3><span>02</span></div>
+    <label class="slider">Sun intensity <output id="sun-intensity-value">1.6</output><input id="sun-intensity" type="range" min="0" max="4" step="0.1" value="1.6"/><span>Off</span><span>Bright</span></label>
     <label class="toggle"><span>Sun shadows<small>Terrain, trees & bushes</small></span><input id="shadows" type="checkbox" checked /></label>
     <label class="field">Shadow detail<select id="shadow-resolution"><option value="1024">Low · 1K</option><option value="2048" selected>Balanced · 2K</option><option value="4096">High · 4K</option></select></label>
     <label class="toggle"><span>Ambient occlusion<small id="ao-note">Contact depth in branches & gullies</small></span><input id="ao" type="checkbox" checked /></label>
     <label class="slider">Occlusion strength <output id="ao-strength-value">1.2</output><input id="ao-strength" type="range" min="0.2" max="2.5" step="0.1" value="1.2"/></label>
     <label class="slider">Atmospheric haze <output id="haze-value">35%</output><input id="haze" type="range" min="0" max="1" step="0.05" value="0.35"/><span>Clear</span><span>Misty</span></label>
+    <label class="field">Haze color <input id="haze-color" type="color" value="#b8c8bc" /></label>
     <p class="muted">Lighting updates instantly. Lower shadow detail or turn off occlusion for more performance.</p>
   </section>
   <section><div class="section-title"><h3>Tree library</h3><span>03</span></div><p class="muted">Demo trees load automatically. Each model gets its own side & top billboard captures. Replace either habitat with your own static GLB.</p>
@@ -65,8 +67,9 @@ $('generate').onclick = () => generate();
 $('randomize').onclick = () => { $('seed').value = Math.floor(Math.random() * 999999); generate(); };
 $('home').onclick = () => renderer?.home(config.size, config.relief);
 $('top').onclick = () => renderer?.top();
-const readLighting = () => ({ shadows: $('shadows').checked, ao: $('ao').checked, aoStrength: Number($('ao-strength').value), shadowResolution: Number($('shadow-resolution').value), haze: Number($('haze').value) });
-for (const id of ['shadows', 'ao', 'ao-strength', 'shadow-resolution', 'haze']) $(id).addEventListener('input', () => {
+const readLighting = () => ({ sunIntensity: Number($('sun-intensity').value), shadows: $('shadows').checked, ao: $('ao').checked, aoStrength: Number($('ao-strength').value), shadowResolution: Number($('shadow-resolution').value), haze: Number($('haze').value), hazeColor: $('haze-color').value });
+for (const id of ['sun-intensity', 'shadows', 'ao', 'ao-strength', 'shadow-resolution', 'haze', 'haze-color']) $(id).addEventListener('input', () => {
+  $('sun-intensity-value').value = Number($('sun-intensity').value).toFixed(1);
   $('haze-value').value = `${Math.round(Number($('haze').value) * 100)}%`;
   $('ao-strength-value').value = Number($('ao-strength').value).toFixed(1);
   $('ao-strength').disabled = !$('ao').checked;
@@ -81,6 +84,7 @@ async function start() {
     renderer = createRenderer($('viewport'));
     renderer.setDistances(readDistances());
     if (!renderer.aoSupported) { $('ao').checked = false; $('ao').disabled = true; $('ao-strength').disabled = true; $('ao-note').textContent = 'Requires WebGL 2 with multiple render targets'; }
+    renderer.setLighting(readLighting());
     status('Loading your demo trees…');
     busy = true;
     const models = [

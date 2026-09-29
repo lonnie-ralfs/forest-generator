@@ -80,6 +80,9 @@ export function createTreeBillboards(scene, sources, kind, configureMaterial) {
   return {
     side, top, padding: Math.max(width, height),
     get ready() { return captures.every(c => c.ready); },
+    refresh() {
+      for (const c of captures) c.texture.resetRefreshCounter();
+    },
     dispose() {
       for (const c of captures) {
         const index = scene.customRenderTargets.indexOf(c.texture);

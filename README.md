@@ -20,6 +20,8 @@ Billboards receive only 25% of that occlusion at their switch distance, smoothly
 
 ## Generation
 
+**Sun intensity** adjusts direct sunlight from 0 to 4 (default 1.6), while ambient sky light remains available. Distant tree captures refresh to match. **Haze color** changes atmospheric fog and its matching sky background. Both controls update live, persist through regeneration, and are included in exported settings.
+
 - Seeded, warped mountain peaks and ridged detail create connected uplands, valleys, forest patches and clearings.
 - The **Erosion** slider controls a downhill rainfall-accumulation pass that carves converging channels, followed by 12 thermal-weathering passes that transfer loose material onto lower slopes. This is a lightweight terrain approximation, not a time-dependent hydraulic simulation. Set it to zero to see the unweathered mountains. Exposed slopes and summits become rocky; drainage cuts receive darker mineral soil.
 - Jittered grid sampling limits clumping; density thins those candidates. Trees are rejected if the terrain gradient exceeds the selected slope.

@@ -78,7 +78,7 @@ export function createRenderer(canvas) {
   }
   scene.onBeforeRenderObservable.add(updateVisibility);
   let shadowGenerator, aoPipeline, worldConfig, shadowCasters = [];
-  const lighting = { shadows: true, ao: true, aoStrength: 1.2, shadowResolution: 2048, haze: 0.35 };
+  const lighting = { sunIntensity: 1.6, shadows: true, ao: true, aoStrength: 1.2, shadowResolution: 2048, haze: 0.35, hazeColor: '#b8c8bc' };
   const aoSupported = engine.webGLVersion > 1 && engine.getCaps().drawBuffersExtension;
   configureBillboardAO('forest-ao');
   function refreshShadows() {
@@ -95,6 +95,13 @@ export function createRenderer(canvas) {
   }
   function setLighting(options = {}) {
     Object.assign(lighting, options);
+    if (sun.intensity !== lighting.sunIntensity) {
+      sun.intensity = lighting.sunIntensity;
+      // Distant trees bake the scene lights into their cached captures.
+      for (const billboard of billboards.values()) billboard.refresh();
+    }
+    scene.fogColor = Color3.FromHexString(lighting.hazeColor);
+    scene.clearColor = Color4.FromHexString(`${lighting.hazeColor}ff`);
     // Keep comparable visibility when the world and overview distance grow.
     scene.fogDensity = lighting.haze * 0.00155 * 280 / (worldConfig?.size || 280);
     scene.fogMode = lighting.haze > 0 ? Scene.FOGMODE_EXP2 : Scene.FOGMODE_NONE;
