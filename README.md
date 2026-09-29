@@ -8,7 +8,7 @@ The `.github/workflows/deploy.yml` workflow tests, builds, and publishes the sit
 
 ## Controls
 
-Drag to orbit, scroll to zoom, right-drag to pan. Change parameters and click **Regenerate landscape**. **Random seed** generates a different forest. The camera buttons reset the view or show the landscape from above. **Slope** highlights excluded terrain; **Canopy shade** shows the shade field. Export settings saves the currently generated world's parameters and current lighting settings as JSON.
+Drag to orbit, scroll to zoom, right-drag to pan. Change parameters and click **Regenerate landscape**. **Random seed** generates a different forest. The camera buttons reset the view or show the landscape from above. **Slope** highlights excluded terrain; **Canopy shade** shows the shade field. Export settings saves the currently generated world's parameters and current lighting and material settings as JSON.
 
 **Tree billboard distance** (180 m by default) replaces distant trees with model-specific billboards captured in-game. Each tree type gets a transparent 1024 × 1024 side render and top render, using its normalized geometry, materials and the scene lights. The upright side plane blends into a horizontal canopy plane from 35° to 65° camera elevation; overhead views use the top capture. Captures are cached, rebuilt for uploaded replacement models, and retain the model footprint and scale. Full geometry remains visible until both captures are ready. The original `tree_card.png` is preserved but no longer used. **Foliage culling distance** (90 m by default) hides all grass, ferns and bushes beyond that camera-to-root distance, including vertical distance. Both controls update immediately and are included in exported settings. Trees crossfade from geometry to cards over the next 30 m after the billboard distance. Small foliage fades over the final 20 m before its culling distance. Each band is capped at 20% of the configured distance. Smooth distance weights drive complementary screen-door dithering, preserving depth and cutout leaves without transparent-instance sorting; slight grain can be visible during a transition.
 
@@ -20,7 +20,7 @@ Billboards receive only 25% of that occlusion at their switch distance, smoothly
 
 ## Generation
 
-**Sun intensity** adjusts direct sunlight from 0 to 4 (default 1.6), while ambient sky light remains available. Distant tree captures refresh to match. **Haze color** changes atmospheric fog and its matching sky background. Both controls update live, persist through regeneration, and are included in exported settings.
+**Sun intensity** adjusts direct sunlight from 0 to 4 (default 4.0), while ambient sky light remains available. Distant tree captures refresh to match. **Haze color** changes atmospheric fog and its matching sky background. Both controls update live, persist through regeneration, and are included in exported settings.
 
 - Seeded, warped mountain peaks and ridged detail create connected uplands, valleys, forest patches and clearings.
 - The **Erosion** slider controls a downhill rainfall-accumulation pass that carves converging channels, followed by 12 thermal-weathering passes that transfer loose material onto lower slopes. This is a lightweight terrain approximation, not a time-dependent hydraulic simulation. Set it to zero to see the unweathered mountains. Exposed slopes and summits become rocky; drainage cuts receive darker mineral soil.
@@ -36,7 +36,7 @@ The two GLBs in `assets/trees_demo` load automatically and are included in produ
 
 Use either **Tree library** upload to replace that habitat with another local `.glb`. Static multi-mesh models and their materials are supported. Hierarchy transforms are baked; models are centered horizontally, grounded, and normalized to 12 units tall before per-tree scaling. Use complete Y-up trees with the trunk centered. Skinned and morph-target models are rejected because this renderer uses static thin instances. Uploaded files remain local and are not retained after reload; the bundled demo models return on reload. Loading a new model replaces the previous one for that habitat. Blockouts remain as a fallback if a bundled model fails to load.
 
-Terrain, blockouts and imported trees use the PBR material pipeline so they share the same fog response. Authored UI colors and terrain vertex colors are converted to linear space; GLB textures retain the loader's color-space and alpha-cutout settings. **Atmospheric haze** updates immediately (zero disables fog). The lower default and density scaling with world extent prevent the overview camera from washing out the trees. Different textures still respond differently to lighting; fog does not indicate a damaged GLB.
+Terrain, blockouts and imported trees use the PBR material pipeline so they share the same fog response. Authored UI colors and terrain vertex colors are converted to linear space; GLB textures retain the loader's color-space and alpha-cutout settings. **Atmospheric haze** updates immediately (zero disables fog). Fog density scales with world extent. The default haze is 60% with sky blue RGB (124, 210, 254), and ambient occlusion strength defaults to 0.7. Different textures still respond differently to lighting; fog does not indicate a damaged GLB.
 
 ## Performance and limits
 
@@ -49,3 +49,5 @@ This is a blockout foundation, not an infinite-world streamer. There is no occlu
 Babylon reference: [thin instances](https://doc.babylonjs.com/features/featuresDeepDive/mesh/copies/thinInstances/).
 
 
+
+**Ground & grass** provides live ground, forest-litter, rock, and grass color pickers, plus separate ground and grass roughness. The matte woodland baseline uses deeper greens and muted stone to complement the trees. Ground colors retain canopy shade, exposed slopes, and erosion variation. Changes update terrain vertex colors without regenerating the world; diagnostic views retain their own palette. Material settings survive regeneration and are exported as JSON. **Reset woodland materials** restores the palette and roughness without changing lighting.

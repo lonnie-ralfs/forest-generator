@@ -2,6 +2,7 @@ import './style.css';
 import { makeForest } from './ecology.js';
 import { createRenderer } from './renderer.js';
 import { DEFAULT_DISTANCES } from './visibility.js';
+import { DEFAULT_LIGHTING, DEFAULT_MATERIALS } from './appearance.js';
 import edgeTreeUrl from '../assets/trees_demo/tree_edge_demo.glb?url';
 import interiorTreeUrl from '../assets/trees_demo/tree_interior_demo.glb?url';
 
@@ -25,16 +26,23 @@ document.querySelector('#app').innerHTML = `
     <div class="actions"><button id="randomize">⤨ Random seed</button><button id="export">↓ Export settings</button></div>
   </section>
   <section><div class="section-title"><h3>Light & depth</h3><span>02</span></div>
-    <label class="slider">Sun intensity <output id="sun-intensity-value">1.6</output><input id="sun-intensity" type="range" min="0" max="4" step="0.1" value="1.6"/><span>Off</span><span>Bright</span></label>
+    <label class="slider">Sun intensity <output id="sun-intensity-value">${DEFAULT_LIGHTING.sunIntensity.toFixed(1)}</output><input id="sun-intensity" type="range" min="0" max="4" step="0.1" value="${DEFAULT_LIGHTING.sunIntensity}"/><span>Off</span><span>Bright</span></label>
     <label class="toggle"><span>Sun shadows<small>Terrain, trees & bushes</small></span><input id="shadows" type="checkbox" checked /></label>
     <label class="field">Shadow detail<select id="shadow-resolution"><option value="1024">Low · 1K</option><option value="2048" selected>Balanced · 2K</option><option value="4096">High · 4K</option></select></label>
     <label class="toggle"><span>Ambient occlusion<small id="ao-note">Contact depth in branches & gullies</small></span><input id="ao" type="checkbox" checked /></label>
-    <label class="slider">Occlusion strength <output id="ao-strength-value">1.2</output><input id="ao-strength" type="range" min="0.2" max="2.5" step="0.1" value="1.2"/></label>
-    <label class="slider">Atmospheric haze <output id="haze-value">35%</output><input id="haze" type="range" min="0" max="1" step="0.05" value="0.35"/><span>Clear</span><span>Misty</span></label>
-    <label class="field">Haze color <input id="haze-color" type="color" value="#b8c8bc" /></label>
+    <label class="slider">Occlusion strength <output id="ao-strength-value">${DEFAULT_LIGHTING.aoStrength}</output><input id="ao-strength" type="range" min="0.2" max="2.5" step="0.1" value="${DEFAULT_LIGHTING.aoStrength}"/></label>
+    <label class="slider">Atmospheric haze <output id="haze-value">${DEFAULT_LIGHTING.haze * 100}%</output><input id="haze" type="range" min="0" max="1" step="0.05" value="${DEFAULT_LIGHTING.haze}"/><span>Clear</span><span>Misty</span></label>
+    <label class="field">Haze color <input id="haze-color" type="color" value="${DEFAULT_LIGHTING.hazeColor}" /></label>
     <p class="muted">Lighting updates instantly. Lower shadow detail or turn off occlusion for more performance.</p>
   </section>
-  <section><div class="section-title"><h3>Tree library</h3><span>03</span></div><p class="muted">Demo trees load automatically. Each model gets its own side & top billboard captures. Replace either habitat with your own static GLB.</p>
+  <section><div class="section-title"><h3>Ground & grass</h3><span>03</span></div>
+    <p class="muted">Deep woodland greens with earthy shade and stone. Colors appear in Natural view.</p>
+    ${[['groundColor', 'Ground color'], ['litterColor', 'Forest litter color'], ['rockColor', 'Rock color'], ['grassColor', 'Grass color']].map(([key, label]) => `<label class="field">${label}<input id="${key}" type="color" value="${DEFAULT_MATERIALS[key]}" /></label>`).join('')}
+    ${[['groundRoughness', 'Ground roughness'], ['grassRoughness', 'Grass roughness']].map(([key, label]) => `<label class="slider">${label}<output id="${key}-value">${DEFAULT_MATERIALS[key].toFixed(2)}</output><input id="${key}" type="range" min="0.1" max="1" step="0.05" value="${DEFAULT_MATERIALS[key]}"/><span>Smooth</span><span>Matte</span></label>`).join('')}
+    <button id="reset-materials" class="primary">Reset woodland materials</button>
+    <p class="muted">Updates instantly without regenerating. Grass color affects the grass blades; ground colors blend with shade, slope, and erosion.</p>
+  </section>
+  <section><div class="section-title"><h3>Tree library</h3><span>04</span></div><p class="muted">Demo trees load automatically. Each model gets its own side & top billboard captures. Replace either habitat with your own static GLB.</p>
     <label class="model"><span class="tree-symbol">♠</span><span><strong>Forest edge</strong><small id="edge-name">Full, low-reaching canopy</small></span><span class="upload">＋</span><input id="edge-file" type="file" accept=".glb" aria-label="Import forest edge GLB"/></label>
     <label class="model"><span class="tree-symbol">♠</span><span><strong>Forest interior</strong><small id="core-name">High crown & dead branches</small></span><span class="upload">＋</span><input id="core-file" type="file" accept=".glb" aria-label="Import forest interior GLB"/></label>
   </section>
@@ -68,6 +76,16 @@ $('randomize').onclick = () => { $('seed').value = Math.floor(Math.random() * 99
 $('home').onclick = () => renderer?.home(config.size, config.relief);
 $('top').onclick = () => renderer?.top();
 const readLighting = () => ({ sunIntensity: Number($('sun-intensity').value), shadows: $('shadows').checked, ao: $('ao').checked, aoStrength: Number($('ao-strength').value), shadowResolution: Number($('shadow-resolution').value), haze: Number($('haze').value), hazeColor: $('haze-color').value });
+const readMaterials = () => Object.fromEntries(Object.entries(DEFAULT_MATERIALS).map(([key, value]) => [key, typeof value === 'number' ? Number($(key).value) : $(key).value]));
+function updateMaterials() {
+  for (const key of ['groundRoughness', 'grassRoughness']) $(`${key}-value`).value = Number($(key).value).toFixed(2);
+  try { renderer?.setMaterials(readMaterials()); } catch (error) { console.error(error); status(`Material update failed: ${error.message}`, true); }
+}
+for (const key of Object.keys(DEFAULT_MATERIALS)) $(key).addEventListener('input', updateMaterials);
+$('reset-materials').onclick = () => {
+  for (const [key, value] of Object.entries(DEFAULT_MATERIALS)) $(key).value = value;
+  updateMaterials();
+};
 for (const id of ['sun-intensity', 'shadows', 'ao', 'ao-strength', 'shadow-resolution', 'haze', 'haze-color']) $(id).addEventListener('input', () => {
   $('sun-intensity-value').value = Number($('sun-intensity').value).toFixed(1);
   $('haze-value').value = `${Math.round(Number($('haze').value) * 100)}%`;
@@ -78,13 +96,14 @@ for (const id of ['sun-intensity', 'shadows', 'ao', 'ao-strength', 'shadow-resol
 });
 document.querySelectorAll('[data-mode]').forEach(button => { button.onclick = async () => { if (!data || busy) return; busy = true; mode = button.dataset.mode; document.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('active', b === button)); status('Updating terrain view…'); await nextFrame(); try { renderer.rebuild(data, config, mode); $('legend').textContent = mode === 'slope' ? `Green: plantable · Terracotta: steeper than ${config.slopeLimit}°` : mode === 'shade' ? 'Gold: open sunlight · Teal: canopy shade' : 'Altitude-adapted pines / Natural ground cover'; status(''); } catch (error) { status(error.message, true); } finally { busy = false; } }; });
 for (const kind of ['edge', 'core']) $(`${kind}-file`).onchange = async event => { const file = event.target.files[0]; if (!file || !renderer || busy) return; busy = true; status(`Loading ${file.name}…`); try { await renderer.loadModel(file, kind); renderer.rebuild(data, config, mode); $(`${kind}-name`).textContent = file.name; displayStats(); status(''); } catch (error) { console.error(error); status(`GLB import failed: ${error.message}`, true); } finally { busy = false; event.target.value = ''; } };
-$('export').onclick = () => { if (!config) return; const url = URL.createObjectURL(new Blob([JSON.stringify({ ...config, distances: readDistances(), lighting: readLighting() }, null, 2)], { type: 'application/json' })); const a = document.createElement('a'); a.href = url; a.download = `pinefield-${config.seed}.json`; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); };
+$('export').onclick = () => { if (!config) return; const url = URL.createObjectURL(new Blob([JSON.stringify({ ...config, distances: readDistances(), lighting: readLighting(), materials: readMaterials() }, null, 2)], { type: 'application/json' })); const a = document.createElement('a'); a.href = url; a.download = `pinefield-${config.seed}.json`; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); };
 async function start() {
   try {
     renderer = createRenderer($('viewport'));
     renderer.setDistances(readDistances());
     if (!renderer.aoSupported) { $('ao').checked = false; $('ao').disabled = true; $('ao-strength').disabled = true; $('ao-note').textContent = 'Requires WebGL 2 with multiple render targets'; }
     renderer.setLighting(readLighting());
+    renderer.setMaterials(readMaterials());
     status('Loading your demo trees…');
     busy = true;
     const models = [

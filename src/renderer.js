@@ -13,6 +13,7 @@ import { createTreeBillboards } from './treeBillboards.js';
 import { DEFAULT_DISTANCES, updateInstanceBuffers } from './visibility.js';
 import { BillboardAO, configureBillboardAO } from './billboardAO.js';
 import { InstanceFade } from './instanceFade.js';
+import { DEFAULT_LIGHTING, DEFAULT_MATERIALS } from './appearance.js';
 import { SceneLoader } from '@babylonjs/core/Loading/sceneLoader';
 import '@babylonjs/core/Meshes/thinInstanceMesh';
 import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator';
@@ -23,16 +24,17 @@ import '@babylonjs/core/Rendering/prePassRendererSceneComponent';
 export function createRenderer(canvas) {
   const engine = new Engine(canvas, true, { stencil: false, preserveDrawingBuffer: true });
   engine.setHardwareScalingLevel(Math.max(1, window.devicePixelRatio / 1.5));
-  const scene = new Scene(engine); scene.clearColor = Color4.FromHexString('#b8c8bcff');
-  scene.fogMode = Scene.FOGMODE_EXP2; scene.fogDensity = 0.00055; scene.fogColor = Color3.FromHexString('#b8c8bc');
+  const scene = new Scene(engine); scene.clearColor = Color4.FromHexString(`${DEFAULT_LIGHTING.hazeColor}ff`);
+  scene.fogMode = Scene.FOGMODE_EXP2; scene.fogDensity = DEFAULT_LIGHTING.haze * 0.00155; scene.fogColor = Color3.FromHexString(DEFAULT_LIGHTING.hazeColor);
   scene.skipPointerMovePicking = true;
   const camera = new ArcRotateCamera('camera', -Math.PI * 0.62, 0.93, 300, new Vector3(0, 23, 0), scene);
   camera.attachControl(canvas, true); camera.lowerRadiusLimit = 12; camera.upperRadiusLimit = 1100; camera.upperBetaLimit = 1.48; camera.wheelPrecision = 5; camera.panningSensibility = 35; camera.minZ = 0.5; camera.maxZ = 1800;
   const hemi = new HemisphericLight('sky', new Vector3(0, 1, 0), scene); hemi.intensity = 0.65; hemi.groundColor = new Color3(0.22, 0.27, 0.19);
-  const sun = new DirectionalLight('sun', new Vector3(-0.6, -1, 0.5), scene); sun.intensity = 1.6; sun.diffuse = new Color3(1, 0.9, 0.72);
+  const sun = new DirectionalLight('sun', new Vector3(-0.6, -1, 0.5), scene); sun.intensity = DEFAULT_LIGHTING.sunIntensity; sun.diffuse = new Color3(1, 0.9, 0.72);
   // Match the glTF material pipeline, including linear-space lighting and fog.
   const material = (name, color) => { const m = new PBRMaterial(name, scene); m.albedoColor = Color3.FromHexString(color).toLinearSpace(); m.metallic = 0; m.roughness = 1; return m; };
-  const bark = material('warm bark', '#64513b'), needles = material('pine needles', '#355b43'), tips = material('new growth', '#486b47'), grass = material('meadow', '#7e8b4b'), fern = material('ferns', '#4f7545');
+  const surface = { ...DEFAULT_MATERIALS };
+  const bark = material('warm bark', '#64513b'), needles = material('pine needles', '#355b43'), tips = material('new growth', '#486b47'), grass = material('meadow', surface.grassColor), fern = material('ferns', '#4f7545');
   const prototypes = new Map(), imported = new Map(); let batches = [], groundMesh;
   const fadingMaterials = new WeakSet();
   function enableInstanceFade(material) {
@@ -78,7 +80,7 @@ export function createRenderer(canvas) {
   }
   scene.onBeforeRenderObservable.add(updateVisibility);
   let shadowGenerator, aoPipeline, worldConfig, shadowCasters = [];
-  const lighting = { sunIntensity: 1.6, shadows: true, ao: true, aoStrength: 1.2, shadowResolution: 2048, haze: 0.35, hazeColor: '#b8c8bc' };
+  const lighting = { ...DEFAULT_LIGHTING };
   const aoSupported = engine.webGLVersion > 1 && engine.getCaps().drawBuffersExtension;
   configureBillboardAO('forest-ao');
   function refreshShadows() {
@@ -146,21 +148,41 @@ export function createRenderer(canvas) {
     finish(kind, pieces);
   }
   const soil = material('forest floor', '#ffffff'); soil.backFaceCulling = false;
+  let terrainWeights = [], terrainMode = 'natural';
+  function naturalGroundColor(shade, exposed, erosion) {
+    return Color3.Lerp(Color3.Lerp(Color3.FromHexString(surface.groundColor),
+      Color3.FromHexString(surface.litterColor), shade), Color3.FromHexString(surface.rockColor), exposed)
+      .scale(1 - erosion * 0.25).toLinearSpace();
+  }
+  function setMaterials(options = {}) {
+    const paletteChanged = ['groundColor', 'litterColor', 'rockColor'].some(key => options[key] !== undefined && options[key] !== surface[key]);
+    Object.assign(surface, options);
+    grass.albedoColor = Color3.FromHexString(surface.grassColor).toLinearSpace();
+    grass.roughness = surface.grassRoughness;
+    soil.roughness = surface.groundRoughness;
+    if (paletteChanged && groundMesh && terrainMode === 'natural') {
+      const colors = [];
+      for (const weights of terrainWeights) {
+        const c = naturalGroundColor(...weights);
+        colors.push(c.r, c.g, c.b, 1);
+      }
+      groundMesh.setVerticesData('color', colors, true);
+    }
+  }
   function terrain(data, config, mode) {
     const n = Math.min(400, Math.ceil(config.size / 1.1)), positions = [], indices = [], colors = [], normals = [];
-    const green = Color3.FromHexString('#879269'), litter = Color3.FromHexString('#635b40'), rock = Color3.FromHexString('#939487');
+    terrainWeights = []; terrainMode = mode;
     for (let z = 0; z <= n; z++) for (let x = 0; x <= n; x++) {
       const px = (x / n - 0.5) * config.size, pz = (z / n - 0.5) * config.size;
       const h = data.ground(px, pz), s = data.slope(px, pz), shade = data.shade(px, pz);
       positions.push(px, h, pz);
-      let c = Color3.Lerp(green, litter, shade);
       const exposed = Math.min(1, Math.max(0, (s - 24) / 18, (h / config.relief - 0.85) * 1.3));
-      c = Color3.Lerp(c, rock, exposed);
       // Darker mineral soil makes drainage cuts legible without extra textures.
-      c = c.scale(1 - data.erosionAt(px, pz) * 0.25);
-      if (mode === 'slope') c = s > config.slopeLimit ? new Color3(0.8, 0.32, 0.2) : new Color3(0.3, 0.55, 0.4);
-      if (mode === 'shade') c = Color3.Lerp(new Color3(0.85, 0.8, 0.51), new Color3(0.15, 0.34, 0.37), shade);
-      c = c.toLinearSpace();
+      const weights = [shade, exposed, data.erosionAt(px, pz)];
+      terrainWeights.push(weights);
+      let c = naturalGroundColor(...weights);
+      if (mode === 'slope') c = (s > config.slopeLimit ? new Color3(0.8, 0.32, 0.2) : new Color3(0.3, 0.55, 0.4)).toLinearSpace();
+      if (mode === 'shade') c = Color3.Lerp(new Color3(0.85, 0.8, 0.51), new Color3(0.15, 0.34, 0.37), shade).toLinearSpace();
       colors.push(c.r, c.g, c.b, 1);
     }
     for (let z = 0; z < n; z++) for (let x = 0; x < n; x++) { const a = z * (n + 1) + x; indices.push(a, a + 1, a + n + 1, a + 1, a + n + 2, a + n + 1); }
@@ -242,5 +264,5 @@ export function createRenderer(canvas) {
   }
   setLighting();
   engine.runRenderLoop(() => scene.render()); window.addEventListener('resize', () => engine.resize());
-  return { engine, scene, camera, rebuild, loadModel, setLighting, setDistances, aoSupported, home(size, relief) { camera.setTarget(new Vector3(0, relief * 0.55, 0)); camera.alpha = -Math.PI * 0.62; camera.beta = 0.93; camera.radius = size * 1.55; }, top() { camera.beta = 0.05; }, get batches() { return batches.length; } };
+  return { engine, scene, camera, rebuild, loadModel, setLighting, setMaterials, setDistances, aoSupported, home(size, relief) { camera.setTarget(new Vector3(0, relief * 0.55, 0)); camera.alpha = -Math.PI * 0.62; camera.beta = 0.93; camera.radius = size * 1.55; }, top() { camera.beta = 0.05; }, get batches() { return batches.length; } };
 }
